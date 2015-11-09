@@ -78,6 +78,7 @@ class Train(object):
         self.between_stations = (starting_station, starting_station)
         self.distance_from_station1 = 0
         self.train_priority = train_priority
+        self.train_running = False
         
 class Event(object):
 
@@ -88,6 +89,8 @@ class Event(object):
         self.train_id = train_id
         self.object_id = object_id
         self.event_type = event_type
+        self.id = Event.event_id
+        Event.event_id += 1
 
 
 def get_distance_between_stations(coordinate1, coordinate2):
@@ -170,7 +173,7 @@ def generate_train(station_list, adjacency_matrix_station, max_route_length, las
     train_route = generate_train_route(station_list, adjacency_matrix_station,
                                        max_route_length)
     velocity = 1
-    start_time = random.randint(last_train_start_time, 10000 + last_train_start_time)
+    start_time = random.randint(last_train_start_time + 1, 3 + last_train_start_time)
     train_priority = 1
     train_generated = Train(velocity, start_time, train_route[0], train_route[-1],
                             train_route, train_priority)
@@ -234,29 +237,85 @@ def generate_events_all_trains_meeting_stations(train_list, rsu_list, station_li
     for train in train_list:
         events += generate_events_train_meeting_stations(train, rsu_list, station_list, adjacency_matrix_station)
     return events
-        
-"""def generate_train_meeting_events(events, train_list, station_list):
+
+
+def sort_events(event1, event2):
+    if event1.event_time < event2.event_time:
+        return -1
+    return 1
+
+def generate_train_meeting_events(events, train_list, station_list, adjacency_matrix_station):
     all_events = []
+    previous_event_time = 0
     for event in events:
-        all_event.append(event)
+        all_events.append(event)
         if event.event_type == 'Station crossing' or event.event_type == 'Train starting':
-"""            
+            current_event_time = event.event_time
+            time_elapsed = current_event_time - previous_event_time
+            previous_event_time=current_event_time
+            # Skip updating for the train if the train is now starting
+            for train in train_list:
+                if current_event_time < train.start_time:
+                    pass
+                elif (train.id == event.train_id and event.event_type == 'Train starting'):
+                    train.between_stations = (train.route[0], train.route[1])
+                    train.train_running = True
+                    for another_train in train_list:
+                        # If this train is also in between the same stations
+                        # They will meet only if their directions of movement is opposite
+                        if train.between_stations == another_train.between_stations[::-1]:
+                            # Calculate the meeting time
+                            relative_velocity = train.velocity + another_train.velocity
+                            meeting_time = ((adjacency_matrix_station[train.between_stations[0]][train.between_stations[1]] - another_train.distance_from_station1) * 1.0) / (1.0 * relative_velocity)
+                            # Create and push the event
+                            train_meeting_event = Event(current_event_time + meeting_time,
+                                                        train.id, another_train.id,
+                                                        'Train crossing')
+                            all_events.append(train_meeting_event)
+                else:
+                    if train.train_running:
+                        train.distance_from_station1 += 1.0 * train.velocity * time_elapsed
+                if train.id == event.train_id and event.event_type == 'Station crossing':
+                    # Update the stations
+                    (station1, station2) = train.between_stations
+                    train.distance_from_station1 = 0
+                    current_route_index = train.route.index(station2)
+                    if current_route_index +1 >= len(train.route):
+                        train.train_running = False
+                        train.between_stations = (station2, station2)
+                    else:
+                        train.between_stations = (train.route[current_route_index], train.route[current_route_index+1])
+                        for another_train in train_list:
+                            # If this train is also in between the same stations
+                            # They will meet only if their directions of movement is opposite
+                            if another_train.train_running and train.between_stations == another_train.between_stations[::-1]:
+                                # Calculate the meeting time
+                                relative_velocity = train.velocity + another_train.velocity
+                                meeting_time = ((adjacency_matrix_station[train.between_stations[0]][train.between_stations[1]] - another_train.distance_from_station1) * 1.0) / (1.0 * relative_velocity)
+                                # Create and push the event
+                                train_meeting_event = Event(current_event_time + meeting_time,
+                                                            train.id, another_train.id,
+                                                            'Train crossing')
+                                all_events.append(train_meeting_event)
+    all_events = sorted(all_events, cmp=sort_events)
+    return all_events
 
 def testing(number_of_stations, max_x, max_y):
     list_of_stations = []
     for i in range(number_of_stations):
         Station(max_x, max_y, list_of_stations)
     adjacency_matrix_station = initialize_adjacency_matrix(number_of_stations)
-
     for i in range(number_of_stations):
         for j in range(i, number_of_stations):
             generate_tracks_between_two_stations(list_of_stations[i], list_of_stations[j], adjacency_matrix_station)
     distance_between_RSU = 8.0        
     rsu_list = deploy_RSU(list_of_stations, adjacency_matrix_station, distance_between_RSU)
-    number_of_trains_to_be_generated = 2
-    max_route_length = 3
+    number_of_trains_to_be_generated = 20
+    max_route_length = number_of_stations
     train_list = generate_event_train_starting(list_of_stations, adjacency_matrix_station,
                                   number_of_trains_to_be_generated, max_route_length)
     # Manage Events
     events = generate_events_all_trains_meeting_stations(train_list, rsu_list, list_of_stations, adjacency_matrix_station)
-    return (list_of_stations, adjacency_matrix_station, rsu_list, events, train_list)
+    events = sorted(events, cmp=sort_events)
+    all_events = generate_train_meeting_events(events, train_list, list_of_stations, adjacency_matrix_station)
+    return (list_of_stations, adjacency_matrix_station, rsu_list, all_events, train_list)
