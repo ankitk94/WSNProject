@@ -349,25 +349,66 @@ def get_tdma_slots_dfs(graph, mapping_to_graph, visited, vertex):
             tdma_slots += 1
             connected_vertices.append(i)
         for v in connected_vertices:
-            tdma_slots = max(tdma_slots, get_tdma_slots_dfs(graph, mapping_to_graph, visited, vertex))
+            tdma_slots = max(tdma_slots, get_tdma_slots_dfs(graph, mapping_to_graph, visited, v))
     return tdma_slots
         
+def find_connected_components(graph,visited,vertex):
+    if visited[vertex]==1:
+        return
+    visited[vertex]=1
+    for i in range(len(graph)):
+        if graph[vertex][i] == 1:
+            find_connected_components(graph,visited,i)
+    return        
 
-def simulate_tdma(graph, mapping_to_graph, vertex):
+
+
+def simulate_mac(graph,mapping_to_graph,connected_components_array,time_to_be_simulated):
+    print connected_components_array
+    return 
+
+
+
+
+    
+def simulate_tdma(graph, mapping_to_graph, vertex, previous_start_time, new_start_time):
     visited = [0 for i in range(len(graph))]
     tdma_slots = 0
     tdma_slots = get_tdma_slots_dfs(graph, mapping_to_graph, visited, mapping_to_graph(vertex), tdma_slots)
-    
+    ###finding the connected components
+    visited = [0 for i in range(len(graph))]
+    visited1=[0 for i in range(len(graph))]
+    mark=[0 for i in range(len(graph))]
+    print 2
+    while(True):
+        print 1
+        all_visited=True
+        for v in range(len(visited)):
+            if(visited[v]==0):
+                all_visited=False
+                break
+        if(all_visited):
+            break
+        
+        find_connected_components(graph,visited,  v )
+        for i in range(len(visited)):
+            if(visited[i]+visited1[i]==1):
+                mark[i]=1
+            else:
+                mark[i]=0       
+        visited1 =[i for i in visited]
+        simulate_mac(graph,mapping_to_graph,mark,new_start_time-previous_start_time)
 
 
+        
 def simulate_epsilon_events(event_list_epsilon, train_list, rsu_list):
     current_events = []
-    graph = [[0 for i in len(train_list) + len(rsu_list)] for p in len(train_list) + len(rsu_list)]
+    graph = [[0 for i in range(len(train_list) + len(rsu_list))] for p in range(len(train_list) + len(rsu_list))]
     counter = 0
     mapping_to_graph = {}
     for train in train_list:
-        mapping_to_graph[('train', train.id)] = couter
-        couter += 1
+        mapping_to_graph[('train', train.id)] = counter
+        counter += 1
     for rsu in rsu_list:
         mapping_to_graph[('rsu', rsu.id)] = counter
         counter += 1
@@ -377,19 +418,20 @@ def simulate_epsilon_events(event_list_epsilon, train_list, rsu_list):
         current_events.append(event)
         new_start_time = event[0]
         # Increase the count of communicating objects
-        train = get_train_object(event[2].train_id)
+        train = get_train_object(event[2].train_id, train_list)
         train.currently_communicating_objects -= 1
         if event[2].event_type == "Train crossing":
-            train = get_train_object(event[2].object_id)
+            train = get_train_object(event[2].object_id, train_list)
             train.currently_communicating_objects += 1
             graph[mapping_to_graph[('train', event[2].train_id)]][mapping_to_graph[('train', train.id)]] = graph[mapping_to_graph[('train', train.id)]][mapping_to_graph[('train', event[2].train_id)]] = 1
         else:
-            rsu = get_rsu_object(event[2].object_id)
+            rsu = get_rsu_object(event[2].object_id, rsu_list)
             rsu.currently_communicating_objects += 1
             graph[mapping_to_graph[('train', event[2].train_id)]][mapping_to_graph[('rsu', rsu.id)]] = graph[mapping_to_graph[('rsu', rsu.id)]][mapping_to_graph[('train', event[2].train_id)]] = 1
         simulate_tdma(graph, mapping_to_graph, ('train', event[2].train_id), previous_start_time, new_start_time)
         current_events = sorted(current_events, cmp=custom_sort_epsilon_events_end_time)
         while event[0] > current_events[0][1]:
+            print 3
             current_event = current_events[0][2]
             current_events = current_events[1:]
             # Decrease the count of connected objects communicating with all of these objects
@@ -398,17 +440,17 @@ def simulate_epsilon_events(event_list_epsilon, train_list, rsu_list):
             if train.currently_communicating_objects < 0:
                 raise Exception('Communicating objects should be >= 0')
             if current_event.event_type == "Train crossing":
-                train = get_train_object(current_event.object_id)
+                train = get_train_object(current_event.object_id, train_list)
                 train.currently_communicating_objects -= 1
-                if graph[mapping_to_graph[('train', event[2].train_id)]][mapping_to_graph[('train', train.id)]] = graph[mapping_to_graph[('train', train.id)]][mapping_to_graph[('train', event[2].train_id)]] == 0:
+                if graph[mapping_to_graph[('train', train.id)]][mapping_to_graph[('train', event[2].train_id)]] == 0:
                     raise Exception('Invalid graph')
                 graph[mapping_to_graph[('train', event[2].train_id)]][mapping_to_graph[('train', train.id)]] = graph[mapping_to_graph[('train', train.id)]][mapping_to_graph[('train', event[2].train_id)]] = 0
                 if train.currently_communicating_objects < 0:
                     raise Exception('Communicating objects should be >= 0')
             else:
-                rsu = get_rsu_object(current_event.object_id)
+                rsu = get_rsu_object(current_event.object_id, rsu_list)
                 rsu.currently_communicating_objects -= 1
-                if graph[mapping_to_graph[('train', event[2].train_id)]][mapping_to_graph[('rsu', rsu.id)]] = graph[mapping_to_graph[('rsu', rsu.id)]][mapping_to_graph[('train', event[2].train_id)]] == 0:
+                if graph[mapping_to_graph[('rsu', rsu.id)]][mapping_to_graph[('train', event[2].train_id)]] == 0:
                     raise Exception('Invalid graph')
                 graph[mapping_to_graph[('train', event[2].train_id)]][mapping_to_graph[('rsu', rsu.id)]] = graph[mapping_to_graph[('rsu', rsu.id)]][mapping_to_graph[('train', event[2].train_id)]] = 0
                 if rsu.currently_communicating_objects < 0:
@@ -423,17 +465,17 @@ def simulate_epsilon_events(event_list_epsilon, train_list, rsu_list):
         if train.currently_communicating_objects < 0:
             raise Exception('Communicating objects should be >= 0')
         if current_event.event_type == "Train crossing":
-            train = get_train_object(current_event.object_id)
+            train = get_train_object(current_event.object_id, train_list)
             train.currently_communicating_objects -= 1
-            if graph[mapping_to_graph[('train', event[2].train_id)]][mapping_to_graph[('train', train.id)]] = graph[mapping_to_graph[('train', train.id)]][mapping_to_graph[('train', event[2].train_id)]] == 0:
+            if graph[mapping_to_graph[('train', train.id)]][mapping_to_graph[('train', event[2].train_id)]] == 0:
                 raise Exception('Invalid graph')
             graph[mapping_to_graph[('train', event[2].train_id)]][mapping_to_graph[('train', train.id)]] = graph[mapping_to_graph[('train', train.id)]][mapping_to_graph[('train', event[2].train_id)]] = 0
             if train.currently_communicating_objects < 0:
                 raise Exception('Communicating objects should be >= 0')
         else:
-            rsu = get_rsu_object(current_event.object_id)
+            rsu = get_rsu_object(current_event.object_id, rsu_list)
             rsu.currently_communicating_objects -= 1
-            if graph[mapping_to_graph[('train', event[2].train_id)]][mapping_to_graph[('rsu', rsu.id)]] = graph[mapping_to_graph[('rsu', rsu.id)]][mapping_to_graph[('train', event[2].train_id)]] == 0:
+            if graph[mapping_to_graph[('rsu', rsu.id)]][mapping_to_graph[('train', event[2].train_id)]] == 0:
                 raise Exception('Invalid graph')
             graph[mapping_to_graph[('train', event[2].train_id)]][mapping_to_graph[('rsu', rsu.id)]] = graph[mapping_to_graph[('rsu', rsu.id)]][mapping_to_graph[('train', event[2].train_id)]] = 0
             if rsu.currently_communicating_objects < 0:
@@ -582,5 +624,6 @@ def testing(number_of_stations, max_x, max_y):
         """
     event_list_epsilon = generate_event_list_epsilon(all_events, 10, train_list)
     event_list_epsilon = sorted(event_list_epsilon, cmp=custom_sort_epsilon_events)
+    simulate_epsilon_events(event_list_epsilon, train_list, rsu_list)
         
     return (list_of_stations, adjacency_matrix_station, rsu_list, all_events, train_list,event_list_epsilon)
