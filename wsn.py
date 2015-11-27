@@ -301,24 +301,37 @@ def generate_train_meeting_events(events, train_list, station_list, adjacency_ma
     return all_events
 
 # to be filled
-def simulate_mac_for_event_list(  list_of_events_that_need_to_be_simulated_simuntaneously,type_of_events):
+def simulate_mac_for_event_list(  simultaneous_events):
+    time_slots=len(simultaneous_events)
+
+    
     return 0
     
 
 #update the event list with the returned list
 ######################
-def simulate_event(event_list,event_to_be_simulated,velocity):
+def simulate_event(event_list,event_to_be_simulated):
     list_of_events_that_need_to_be_simulated_simuntaneously=[]
     updated_event_list=[]
-    epsilon = 10
+    epsilon = 100
     if (event_to_be_simulated.event_type=='RSU crossing' or event_to_be_simulated.event_type=='Station crossing' or event_to_be_simulated.event_type=='Train starting'):
        
         for event in event_list:
             if event==event_to_be_simulated :
+                if event in list_of_events_that_need_to_be_simulated_simuntaneously:
+                    print "same if"
                 list_of_events_that_need_to_be_simulated_simuntaneously.append(event)
             elif(event.event_time-event_to_be_simulated.event_time<=epsilon and event.event_time-event_to_be_simulated.event_time>0):
+                    # either this rsu or this train is involved
                     if(event.event_type=='Train crossing' and (event.train_id==event_to_be_simulated.train_id or event.object_id ==event_to_be_simulated.train_id )):
+                        if event in list_of_events_that_need_to_be_simulated_simuntaneously:
+                            print "same if2"
                         list_of_events_that_need_to_be_simulated_simuntaneously.append(event)
+                    if (event.event_type=='RSU crossing' or event.event_type=='Station crossing' or event.event_type=='Train starting'):
+                        if(event.object_id==event_to_be_simulated.object_id):
+                            if event in list_of_events_that_need_to_be_simulated_simuntaneously:
+                                print "same if3"
+                            list_of_events_that_need_to_be_simulated_simuntaneously.append(event)
                     ## when rsu crossing object id is the rsu    
                     
             else:
@@ -332,12 +345,13 @@ def simulate_event(event_list,event_to_be_simulated,velocity):
                     if(event.event_type=='Train crossing'):
                         if(event.train_id==event_to_be_simulated.train_id or event.object_id==event_to_be_simulated.train_id ):
                             list_of_events_that_need_to_be_simulated_simuntaneously.append(event)
-                        if(event.train_id==event_to_be_simulated.object_id or event.object_id==event_to_be_simulated.object_id ):
+
+                        elif(event.train_id==event_to_be_simulated.object_id or event.object_id==event_to_be_simulated.object_id ):
                             list_of_events_that_need_to_be_simulated_simuntaneously.append(event)
                             
                    
                         
-                    if(event.event_type=='Station crossing' or event.event_type=='RSU crossing' or event_to_be_simulated.event_type=='Train starting'):
+                    elif(event.event_type=='Station crossing' or event.event_type=='RSU crossing' or event_to_be_simulated.event_type=='Train starting'):
                         if(event.train_id==event_to_be_simulated.train_id or event.train_id==event_to_be_simulated.object_id ):
                             list_of_events_that_need_to_be_simulated_simuntaneously.append(event)
                                            
@@ -346,7 +360,7 @@ def simulate_event(event_list,event_to_be_simulated,velocity):
              else:
                 updated_event_list.append(event)
     statistics_of_mac = simulate_mac_for_event_list(  list_of_events_that_need_to_be_simulated_simuntaneously ,'Station or RSU crossing')    
-    return (list_of_events_that_need_to_be_simulated_simuntaneously)        
+    return (list_of_events_that_need_to_be_simulated_simuntaneously,updated_event_list)        
 
         
     
@@ -371,7 +385,10 @@ def testing(number_of_stations, max_x, max_y):
     for i in range(number_of_stations):
         Station(max_x, max_y, list_of_stations)
     adjacency_matrix_station = initialize_adjacency_matrix(number_of_stations)
-   
+
+    ## edited here
+    adjacency_matrix_station[0][1]=adjacency_matrix_station[1][0]=40
+
     for i in range(number_of_stations):
         for j in range(i, number_of_stations):
             generate_tracks_between_two_stations(list_of_stations[i], list_of_stations[j], adjacency_matrix_station)
@@ -389,13 +406,21 @@ def testing(number_of_stations, max_x, max_y):
     train_list[1].starting_station=train_list[1].route[0]
     train_list[0].between_station=(train_list[0].route[0],train_list[0].route[0])
     train_list[1].between_station=(train_list[1].route[0],train_list[1].route[0])
-     ## edited here
-    adjacency_matrix_station[0][1]=adjacency_matrix_station[1][0]=40
 
     
     events = generate_events_all_trains_meeting_stations(train_list, rsu_list, list_of_stations, adjacency_matrix_station)
     events = sorted(events, cmp=sort_events)
     all_events = generate_train_meeting_events(events, train_list, list_of_stations, adjacency_matrix_station)
-    simuntaneous=simulate_event(all_events,all_events[0],5)
     
-    return (list_of_stations, adjacency_matrix_station, rsu_list, all_events, train_list,simuntaneous)
+    simultaneous_events_list = []
+
+    
+    (simultaneous,updated_event)=simulate_event(all_events,all_events[0])
+    simultaneous_events_list.append(simultaneous)
+    while len(updated_event) > 0:
+        (simultaneous,updated_event)=simulate_event(updated_event,updated_event[0])
+        simultaneous_events_list.append(simultaneous)
+        
+        
+        
+    return (list_of_stations, adjacency_matrix_station, rsu_list, all_events, train_list,simultaneous_events_list,updated_event)
