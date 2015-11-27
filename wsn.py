@@ -338,8 +338,19 @@ def get_rsu_object(rsu_id, rsu_list):
         if rsu.id == rsu_id:
             return rsu
 
-def simulate_epsilon_events(event_list_epsilon, train_list):
+def simulate_epsilon_events(event_list_epsilon, train_list, rsu_list):
     current_events = []
+    graph = [[0 for i in len(train_list) + len(rsu_list)] for p in len(train_list) + len(rsu_list)]
+    counter = 0
+    mapping_to_graph = {}
+    for train in train_list:
+        mapping_to_graph[('train', train.id)] = couter
+        couter += 1
+    for rsu in rsu_list:
+        mapping_to_graph[('rsu', rsu.id)] = counter
+        counter += 1
+    # Graph formation done
+    
     for event in event_list_epsilon:
         current_events.append(event)
         # Increase the count of communicating objects
@@ -348,9 +359,11 @@ def simulate_epsilon_events(event_list_epsilon, train_list):
         if event[2].event_type == "Train crossing":
             train = get_train_object(event[2].object_id)
             train.currently_communicating_objects += 1
+            graph[mapping_to_graph[('train', event[2].train_id)]][mapping_to_graph[('train', train.id)]] = graph[mapping_to_graph[('train', train.id)]][mapping_to_graph[('train', event[2].train_id)]] = 1
         else:
             rsu = get_rsu_object(event[2].object_id)
             rsu.currently_communicating_objects += 1
+            graph[mapping_to_graph[('train', event[2].train_id)]][mapping_to_graph[('rsu', rsu.id)]] = graph[mapping_to_graph[('rsu', rsu.id)]][mapping_to_graph[('train', event[2].train_id)]] = 1
         current_events = sorted(current_events, cmp=custom_sort_epsilon_events_end_time)
         while event[0] > current_events[0][1]:
             current_event = current_events[0][2]
@@ -363,11 +376,17 @@ def simulate_epsilon_events(event_list_epsilon, train_list):
             if current_event.event_type == "Train crossing":
                 train = get_train_object(current_event.object_id)
                 train.currently_communicating_objects -= 1
+                if graph[mapping_to_graph[('train', event[2].train_id)]][mapping_to_graph[('train', train.id)]] = graph[mapping_to_graph[('train', train.id)]][mapping_to_graph[('train', event[2].train_id)]] == 0:
+                    raise('Invalid graph')
+                graph[mapping_to_graph[('train', event[2].train_id)]][mapping_to_graph[('train', train.id)]] = graph[mapping_to_graph[('train', train.id)]][mapping_to_graph[('train', event[2].train_id)]] = 0
                 if train.currently_communicating_objects < 0:
                     raise('Communicating objects should be >= 0')
             else:
                 rsu = get_rsu_object(current_event.object_id)
                 rsu.currently_communicating_objects -= 1
+                if graph[mapping_to_graph[('train', event[2].train_id)]][mapping_to_graph[('rsu', rsu.id)]] = graph[mapping_to_graph[('rsu', rsu.id)]][mapping_to_graph[('train', event[2].train_id)]] == 0:
+                    raise('Invalid graph')
+                graph[mapping_to_graph[('train', event[2].train_id)]][mapping_to_graph[('rsu', rsu.id)]] = graph[mapping_to_graph[('rsu', rsu.id)]][mapping_to_graph[('train', event[2].train_id)]] = 0
                 if rsu.currently_communicating_objects < 0:
                     raise('Communicating objects should be >= 0')
     while len(current_events) > 0:
@@ -380,11 +399,17 @@ def simulate_epsilon_events(event_list_epsilon, train_list):
         if current_event.event_type == "Train crossing":
             train = get_train_object(current_event.object_id)
             train.currently_communicating_objects -= 1
+            if graph[mapping_to_graph[('train', event[2].train_id)]][mapping_to_graph[('train', train.id)]] = graph[mapping_to_graph[('train', train.id)]][mapping_to_graph[('train', event[2].train_id)]] == 0:
+                raise('Invalid graph')
+            graph[mapping_to_graph[('train', event[2].train_id)]][mapping_to_graph[('train', train.id)]] = graph[mapping_to_graph[('train', train.id)]][mapping_to_graph[('train', event[2].train_id)]] = 0
             if train.currently_communicating_objects < 0:
                 raise('Communicating objects should be >= 0')
         else:
             rsu = get_rsu_object(current_event.object_id)
             rsu.currently_communicating_objects -= 1
+            if graph[mapping_to_graph[('train', event[2].train_id)]][mapping_to_graph[('rsu', rsu.id)]] = graph[mapping_to_graph[('rsu', rsu.id)]][mapping_to_graph[('train', event[2].train_id)]] == 0:
+                raise('Invalid graph')
+            graph[mapping_to_graph[('train', event[2].train_id)]][mapping_to_graph[('rsu', rsu.id)]] = graph[mapping_to_graph[('rsu', rsu.id)]][mapping_to_graph[('train', event[2].train_id)]] = 0
             if rsu.currently_communicating_objects < 0:
                 raise('Communicating objects should be >= 0')
         
