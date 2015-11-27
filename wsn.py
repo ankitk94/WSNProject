@@ -26,6 +26,7 @@ class RSU(object):
          self.station_id_1=station_1.get_station_id()
          self.station_id_2=station_2.get_station_id()
          self.id = RSU.rsu_id
+         self.currently_communicating_objects = 0
          RSU.rsu_id += 1
          self.set_rsu_coordinate(distance_from_station1,station_1,station_2)
          
@@ -79,6 +80,7 @@ class Train(object):
         self.distance_from_station1 = 0
         self.train_priority = train_priority
         self.train_running = False
+        self.currently_communicating_objects = 0
         
 class Event(object):
 
@@ -300,13 +302,114 @@ def generate_train_meeting_events(events, train_list, station_list, adjacency_ma
     all_events = sorted(all_events, cmp=sort_events)
     return all_events
 
-# to be filled
+
+def get_train_object(train_id, train_list):
+    for train in train_list:
+        if train.id == train_id:
+            return train
+
+# Generate event list according to t-epsilon and t+epsilon
+def generate_event_list_epsilon(event_list, epsilon, train_list):
+    event_list_epsilon = []
+    for event in event_list:
+        start_time = event.event_time - epsilon
+        train1_start_time = get_train_object(event.train_id, train_list).start_time
+        train2_start_time = -1
+        if event.event_type == "Train crossing":
+            train2_start_time = get_train_object(event.object_id, train_list).start_time
+        if start_time < train1_start_time or start_time < train2_start_time:
+            start_time = max(train1_start_time, train2_start_time)
+        end_time = event.event_time + epsilon
+        event_list_epsilon.append((start_time, end_time, event))
+    return event_list_epsilon
+
+def custom_sort_epsilon_events(event1, event2):
+    if event1[0] < event2[0]:
+        return -1
+    return 1
+
+def custom_sort_epsilon_events_end_time(event1, event2):
+    if event1[1] < event2[1]:
+        return -1
+    return 1
+
+def get_rsu_object(rsu_id, rsu_list):
+    for rsu in rsu_list:
+        if rsu.id == rsu_id:
+            return rsu
+
+def simulate_epsilon_events(event_list_epsilon, train_list):
+    current_events = []
+    for event in event_list_epsilon:
+        current_events.append(event)
+        # Increase the count of communicating objects
+        train = get_train_object(event[2].train_id)
+        train.currently_communicating_objects -= 1
+        if event[2].event_type == "Train crossing":
+            train = get_train_object(event[2].object_id)
+            train.currently_communicating_objects += 1
+        else:
+            rsu = get_rsu_object(event[2].object_id)
+            rsu.currently_communicating_objects += 1
+        current_events = sorted(current_events, cmp=custom_sort_epsilon_events_end_time)
+        while event[0] > current_events[0][1]:
+            current_event = current_events[0][2]
+            current_events = current_events[1:]
+            # Decrease the count of connected objects communicating with all of these objects
+            train = get_train_object(current_event.train_id)
+            train.currently_communicating_objects -= 1
+            if train.currently_communicating_objects < 0:
+                raise('Communicating objects should be >= 0')
+            if current_event.event_type == "Train crossing":
+                train = get_train_object(current_event.object_id)
+                train.currently_communicating_objects -= 1
+                if train.currently_communicating_objects < 0:
+                    raise('Communicating objects should be >= 0')
+            else:
+                rsu = get_rsu_object(current_event.object_id)
+                rsu.currently_communicating_objects -= 1
+                if rsu.currently_communicating_objects < 0:
+                    raise('Communicating objects should be >= 0')
+    while len(current_events) > 0:
+        current_events = current_events[0]
+        current_events = current_events[1:]
+        train = get_train_object(current_event.train_id)
+        train.currently_communicating_objects -= 1
+        if train.currently_communicating_objects < 0:
+            raise('Communicating objects should be >= 0')
+        if current_event.event_type == "Train crossing":
+            train = get_train_object(current_event.object_id)
+            train.currently_communicating_objects -= 1
+            if train.currently_communicating_objects < 0:
+                raise('Communicating objects should be >= 0')
+        else:
+            rsu = get_rsu_object(current_event.object_id)
+            rsu.currently_communicating_objects -= 1
+            if rsu.currently_communicating_objects < 0:
+                raise('Communicating objects should be >= 0')
+        
+            
+
+
+
+#######################################################current##################################################3
+# to be filled : this is the TDMA part of the simulation that takes the list of simuntaneous events to be simulated
+
+
+
 def simulate_mac_for_event_list(  simultaneous_events):
     time_slots=len(simultaneous_events)
-
+    
     
     return 0
     
+
+##############################################################################################33
+
+
+
+
+
 
 #update the event list with the returned list
 ######################
@@ -370,8 +473,11 @@ def simulate_event(event_list,event_to_be_simulated):
 
 
 
-
-
+'''def custom_sort_epsilon_events(event1, event2):
+    if event1[0] < event2[0]:
+        return -1
+    return 1
+'''
 
 #######################333
 
@@ -411,7 +517,7 @@ def testing(number_of_stations, max_x, max_y):
     events = generate_events_all_trains_meeting_stations(train_list, rsu_list, list_of_stations, adjacency_matrix_station)
     events = sorted(events, cmp=sort_events)
     all_events = generate_train_meeting_events(events, train_list, list_of_stations, adjacency_matrix_station)
-    
+    """
     simultaneous_events_list = []
 
     
@@ -421,6 +527,8 @@ def testing(number_of_stations, max_x, max_y):
         (simultaneous,updated_event)=simulate_event(updated_event,updated_event[0])
         simultaneous_events_list.append(simultaneous)
         
+        """
+    event_list_epsilon = generate_event_list_epsilon(all_events, 10, train_list)
+    event_list_epsilon = sorted(event_list_epsilon, cmp=custom_sort_epsilon_events)
         
-        
-    return (list_of_stations, adjacency_matrix_station, rsu_list, all_events, train_list,simultaneous_events_list,updated_event)
+    return (list_of_stations, adjacency_matrix_station, rsu_list, all_events, train_list,event_list_epsilon)
