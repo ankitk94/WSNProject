@@ -28,6 +28,8 @@ class RSU(object):
          self.id = RSU.rsu_id
          self.currently_communicating_objects = 0
          RSU.rsu_id += 1
+         self.crack_info_count = 0
+         self.crack_list = []
          self.set_rsu_coordinate(distance_from_station1,station_1,station_2)
          
     def set_rsu_coordinate(self,distance_from_station1,station_1,station_2):
@@ -81,6 +83,8 @@ class Train(object):
         self.train_priority = train_priority
         self.train_running = False
         self.currently_communicating_objects = 0
+        self.crack_info_count = 0
+        self.crack_list = []
         
 class Event(object):
 
@@ -94,6 +98,15 @@ class Event(object):
         self.id = Event.event_id
         Event.event_id += 1
 
+class Crack(object):
+
+    crack_id = 0
+
+    def __init__(self, station1, station2):
+        self.id = Crack.crack_id
+        Crack.crack_id += 1
+        self.station1 = station1
+        self.station2 = station2
 
 def get_distance_between_stations(coordinate1, coordinate2):
     return math.sqrt(1.0 * ((coordinate1[0] - coordinate2[0])**2) + 1.0 * ((coordinate1[1] - coordinate2[1])**2))
@@ -362,16 +375,93 @@ def find_connected_components(graph,visited,vertex):
     return        
 
 
+def get_object_from_graph(graph, index_of_graph, mapping_from_graph, train_list, rsu_list):
+    #print mapping_from_graph
+    #print index_of_graph
+    #print "\n"
+    for i in mapping_from_graph:
+        if mapping_from_graph[i] == index_of_graph:
+            if i[0] == 'rsu':
+                for RSU in rsu_list:
+                    if(RSU.id==i[1]):
+                        
+                        return ('rsu', RSU)
+                raise Exception('Object not found in graph with given index in get_object_from_graph') 
+            else:
+                for train in train_list:
+                    if(train.id==i[1]):
+                        return ('train', train)
+                raise Exception('Object not found in graph with given index in get_object_from_graph') 
+    raise Exception('Object not found in graph with given index in get_object_from_graph')            
 
-def simulate_mac(graph,mapping_to_graph,connected_components_array,time_to_be_simulated):
-    print "khokheeeeeee"
+def packet_error():
+    return False
+
+def simulate_mac(graph,mapping_to_graph,connected_components,time_to_be_simulated, tdma_slots, train_list, rsu_list):
+    total_tdma_slots_for_simulation = int(time_to_be_simulated * 1.0 / tdma_slots)
+    time_for_simulation_for_one_node = total_tdma_slots_for_simulation * 1.0 / (sum(connected_components))
+    print connected_components
+    # Packet size in Bytes
+    packet_size = 1024
+    # Packet transfer speed Bytes/s
+    transfer_speed = 200 * 1024
+    for node_index in range(len(connected_components)):
+        if connected_components[node_index] == 1:
+            node_object_ = get_object_from_graph(graph, node_index, mapping_to_graph, train_list, rsu_list)
+            node_object = node_object_[1]
+            # Total info size to send in Bytes
+            total_information_to_send = 100 * 1024 * node_object.crack_info_count
+            total_packets_to_send = int(total_information_to_send * 1.0 / packet_size)
+            if total_packets_to_send == 0:
+                continue
+            
+            total_packets_can_be_sent = int(transfer_speed * time_for_simulation_for_one_node / packet_size);
+            packets_sent = 0
+            #######
+            print str(total_packets_can_be_sent) + "  "+str(total_packets_to_send)
+           
+            #####
+            for packet in range(total_packets_can_be_sent):
+                if not packet_error():
+                    packets_sent += 1
+            packets_sent=min(packets_sent,total_packets_to_send)
+            total_cracks_info_received = int(packets_sent * node_object.crack_info_count * 1.0 / total_packets_to_send)
+            cracks_info_in_node = node_object.crack_list
+            #####3
+            for node_index_2 in range(len(connected_components)):
+                if(node_index_2!=node_index and connected_components[node_index_2] == 1):
+                    node_object_2_ = get_object_from_graph(graph, node_index_2, mapping_to_graph, train_list, rsu_list)
+                    node_object_2=node_object_2_[1]
+                    if node_object_2_[0] == 'train' and node_index_2 > 1:
+                        print mapping_to_graph
+                        print node_index_2
+                        raise Exception('Train id > 1');
+                    #print "inside inner for"
+                    #print node_object_2_[0]
+                   # print node_object_2_[1].id
+                    if len(node_object.crack_list) >=total_cracks_info_received:
+                        print "sending the packet" 
+                        
+                        node_object_2.crack_list+=node_object.crack_list[-total_cracks_info_received:]
+                        #print (node_object_2_[0])
+                        #print node_index_2
+                        #print type(node_object)
+                        #print mapping_to_graph
+                        node_object_2.crack_list=list(set(node_object_2.crack_list))
+                        node_object_2.crack_info_count=len(node_object_2.crack_list)
+                    else:
+                        raise Exception('trying to send packets that do not exist in the crack array of node')
+                        
+                
+            ##node_object_connected_to_node = get_object_from_graph(graph,  , mapping_from_graph, train_list, rsu_list)
+            
     return 
 
 
 
 
     
-def simulate_tdma(graph, mapping_to_graph, vertex, previous_start_time, new_start_time):
+def simulate_tdma(graph, mapping_to_graph, vertex, previous_start_time, new_start_time, train_list, rsu_list):
     visited = [0 for i in range(len(graph))]
     tdma_slots = 0
     tdma_slots = get_tdma_slots_dfs(graph, mapping_to_graph, visited, mapping_to_graph[vertex])
@@ -392,11 +482,18 @@ def simulate_tdma(graph, mapping_to_graph, vertex, previous_start_time, new_star
         for i in range(len(visited)):
             if(visited[i]+visited1[i]==1):
                 mark[i]=1
+                #print "in mark"
+                #print (get_object_from_graph(graph, i, mapping_to_graph, train_list, rsu_list))[0]
             else:
                 mark[i]=0       
         visited1 =[i for i in visited]
-        simulate_mac(graph,mapping_to_graph,mark,new_start_time-previous_start_time)
-
+        #print "mark is \n"
+        #print mark
+        if(sum(mark)>1):
+            
+            simulate_mac(graph,mapping_to_graph,mark,new_start_time-previous_start_time, tdma_slots, train_list, rsu_list)
+        else:
+            pass
 
         
 def simulate_epsilon_events(event_list_epsilon, train_list, rsu_list):
@@ -426,7 +523,7 @@ def simulate_epsilon_events(event_list_epsilon, train_list, rsu_list):
             rsu = get_rsu_object(event[2].object_id, rsu_list)
             rsu.currently_communicating_objects += 1
             graph[mapping_to_graph[('train', event[2].train_id)]][mapping_to_graph[('rsu', rsu.id)]] = graph[mapping_to_graph[('rsu', rsu.id)]][mapping_to_graph[('train', event[2].train_id)]] = 1
-        simulate_tdma(graph, mapping_to_graph, ('train', event[2].train_id), previous_start_time, new_start_time)
+        simulate_tdma(graph, mapping_to_graph, ('train', event[2].train_id), previous_start_time, new_start_time, train_list, rsu_list)
         current_events = sorted(current_events, cmp=custom_sort_epsilon_events_end_time)
         while event[0] > current_events[0][1]:
             current_event = current_events[0][2]
@@ -447,7 +544,6 @@ def simulate_epsilon_events(event_list_epsilon, train_list, rsu_list):
             else:
                 rsu = get_rsu_object(current_event.object_id, rsu_list)
                 rsu.currently_communicating_objects -= 1
-                print str(rsu.id) + " removing"
                 if graph[mapping_to_graph[('rsu', rsu.id)]][mapping_to_graph[('train', current_event.train_id)]] == 0:
                     raise Exception('Invalid graph')
                 graph[mapping_to_graph[('train', current_event.train_id)]][mapping_to_graph[('rsu', rsu.id)]] = graph[mapping_to_graph[('rsu', rsu.id)]][mapping_to_graph[('train', current_event.train_id)]] = 0
@@ -575,8 +671,15 @@ def simulate_event(event_list,event_to_be_simulated):
 #######################333
 
 
-
-
+def deploy_crack(train_list):
+    crack_list=[]
+    for train in train_list:
+        route_of_train =train.route
+        crack = Crack(route_of_train[0],route_of_train[1])
+        crack_list.append( (train,crack) )
+        train.crack_list.append(crack)
+        train.crack_info_count=1
+    return crack_list    
 
 
 def testing(number_of_stations, max_x, max_y):
@@ -599,6 +702,7 @@ def testing(number_of_stations, max_x, max_y):
                                   number_of_trains_to_be_generated, max_route_length)
     # Manage Events
     #edited here
+    
     train_list[0].route =[0,1]
     train_list[1].route=[1,0]
     train_list[0].starting_station=train_list[0].route[0]
@@ -606,7 +710,9 @@ def testing(number_of_stations, max_x, max_y):
     train_list[0].between_station=(train_list[0].route[0],train_list[0].route[0])
     train_list[1].between_station=(train_list[1].route[0],train_list[1].route[0])
 
-    
+    # deploying the crcks here
+    crack_list = deploy_crack(train_list)
+    ##########################################
     events = generate_events_all_trains_meeting_stations(train_list, rsu_list, list_of_stations, adjacency_matrix_station)
     events = sorted(events, cmp=sort_events)
     all_events = generate_train_meeting_events(events, train_list, list_of_stations, adjacency_matrix_station)
@@ -621,8 +727,31 @@ def testing(number_of_stations, max_x, max_y):
         simultaneous_events_list.append(simultaneous)
         
         """
-    event_list_epsilon = generate_event_list_epsilon(all_events, 10, train_list)
+    event_list_epsilon = generate_event_list_epsilon(all_events, 1, train_list)
     event_list_epsilon = sorted(event_list_epsilon, cmp=custom_sort_epsilon_events)
     simulate_epsilon_events(event_list_epsilon, train_list, rsu_list)
-        
-    return (list_of_stations, adjacency_matrix_station, rsu_list, all_events, train_list,event_list_epsilon)
+    
+    for train in train_list:
+        print "for trains"
+        if(len(train.crack_list)>0):
+            print "train data here"
+            print train.id
+            #print "\n"
+            print len(train.crack_list)
+            
+    print "\n \n for RSU"
+    for train in rsu_list:
+        #print "llllllllllllllllllllllllllllllllll"
+        if(len(train.crack_list)>0):
+            print "rsu data here"
+            print train.id
+            #print "\n"
+            print len(train.crack_list)
+            
+    #print "zzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzz"
+    #print crack_list    
+    #return (list_of_stations, adjacency_matrix_station, rsu_list, all_events, train_list,event_list_epsilon)
+    for rsu in rsu_list:
+        print "station1 station2 id"
+        print str(rsu.station_id_1) + " " + str(rsu.station_id_2) + "  "+str(rsu.id)
+    print train_list[0].route
